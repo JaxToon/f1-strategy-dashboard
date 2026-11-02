@@ -240,7 +240,8 @@ def simulate(snap: Snapshot, cands: list[Cand], n_sims: int, seed: int = 0) -> S
             for o in range(n_own):
                 idx = plan_i[:, o]
                 planned = plan_lap[rows, o, idx]
-                due = planned == lapno
+                # <= because the loop starts from the leader's lap and a car behind can still be a lap short.
+                due = planned <= lapno
                 soon = reactive & started_neutral & (planned > lapno) & (planned - lapno <= 8)
                 rain_react = reactive & (wet_k > SLICK_TO_INTER) & (comp[:, own[o]] <= H)
                 dry_react = reactive & (wet_k < 0.08) & (comp[:, own[o]] == I) & (laps_left > 3)

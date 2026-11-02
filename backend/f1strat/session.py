@@ -21,6 +21,9 @@ from .world import PIT_ENTRY, RaceWorld
 
 STALE_AFTER_S = {"timing": 3.0, "telemetry": 2.0, "race_control": 3.0, "weather": 60.0}
 RADIO_MARGIN_S = 4.0
+SIM_BUDGET_MAX = 300
+SIM_BUDGET_MIN = 60
+RECOMPUTE_TARGET_MS = 1500.0  # half the 3 s limit, leaving room for a slow moment
 STATUS_CODES = {"GREEN": GREEN, "VSC": VSC, "SC": SC, "RED": RED}
 
 ROLES = {
@@ -115,6 +118,7 @@ class RaceSession:
         self.pending_box: dict[str, dict] = {}
         self.neutral_lap = 0
         self.compute_started: float | None = None
+        self.sim_budget = SIM_BUDGET_MAX
 
         self.audit_path = None
         if data_dir is not None:
@@ -438,8 +442,17 @@ class RaceSession:
         passed = row["u"] >= PIT_ENTRY
         return row["lap"] + (2 if passed else 1)
 
-    def compute_recs(self, n_sims: int = 300) -> None:
+    def _adapt_budget(self, elapsed_ms: float) -> None:
+        """Trade precision for time: a late answer is worth less than a coarser one."""
+        if elapsed_ms > RECOMPUTE_TARGET_MS:
+            scaled = self.sim_budget * RECOMPUTE_TARGET_MS / elapsed_ms
+            self.sim_budget = max(SIM_BUDGET_MIN, int(scaled))
+        elif elapsed_ms < RECOMPUTE_TARGET_MS * 0.5:
+            self.sim_budget = min(SIM_BUDGET_MAX, int(self.sim_budget * 1.3))
+
+    def compute_recs(self, n_sims: int | None = None) -> None:
         """Runs in a worker thread during a live session."""
+        n_sims = n_sims or self.sim_budget
         if self.model_failed:
             self.recs = {}
             self.rec_error = "Model gagal"
@@ -476,6 +489,7 @@ class RaceSession:
         self.rec_error = None
         self.compute_started = None
         self.compute_ms.append((time.perf_counter() - started) * 1000)
+        self._adapt_budget(self.compute_ms[-1])
         if event_started is not None:
             self.event_ms.append((time.perf_counter() - event_started) * 1000)
         for rec in results.values():
@@ -766,7 +780,8 @@ class RaceSession:
             "notes": list(reversed(self.notes))[:6], "calibrations": self.calibrations[-4:],
             "compute": {"last_ms": round(self.compute_ms[-1]) if self.compute_ms else None,
                         "event_ms": round(self.event_ms[-1]) if self.event_ms else None,
-                        "running_s": round(now - self.compute_started, 1) if self.compute_started else None},
+                        "running_s": round(now - self.compute_started, 1) if self.compute_started else None,
+                        "sim_budget": self.sim_budget},
             "time": round(self.world.t, 1),
         })
         return view

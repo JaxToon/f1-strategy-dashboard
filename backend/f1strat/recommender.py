@@ -8,7 +8,7 @@ from .laptime import (COMPOUNDS, GREEN, H, I, M, S, SC, SLICK_TO_INTER, SLICKS, 
 from .montecarlo import Cand, Snapshot, SimOut, paired_confidence, simulate, summarize
 from .strategy import Plan, best_continuation, plan_cost, project_exit
 
-MIN_EDGE = 0.05  # utility gap below which we keep the current plan rather than churn
+MIN_EDGE = 0.15  # below this the gap is simulation noise, and a stop is a real cost to pay for it
 
 
 def _other(snap: Snapshot, target: int, plan: Plan) -> list[Plan]:
@@ -126,7 +126,8 @@ def _reasons(snap: Snapshot, target: int, option: dict, best_stat: dict, alt_sta
 
 def recommend(snap: Snapshot, target: int, box_lap: int, status: int, threats: list[dict], seed: int,
               n_sims: int = 300) -> dict:
-    options = live_options(snap, target, box_lap)
+    # The simulation counts laps from the leader, so "now" can be no earlier than its first lap.
+    options = live_options(snap, target, max(box_lap, snap.lap + 1))
     cands = [Cand(o["label"], _other(snap, target, o["plan"])) for o in options]
     out = simulate(snap, cands, n_sims, seed)
     stats = summarize(out, target)

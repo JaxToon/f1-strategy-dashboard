@@ -19,7 +19,6 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "backend" / "data" / "sessions"
 DIST = ROOT / "frontend" / "dist"
 TICK_S = 0.2
-RECOMPUTE_SIMS = 300
 SEND_TIMEOUT_S = 1.0
 
 app = FastAPI(title="F1 Strategy Dashboard")
@@ -75,7 +74,7 @@ async def race_loop() -> None:
 
 async def recompute(session: RaceSession) -> None:
     try:
-        await asyncio.to_thread(session.compute_recs, RECOMPUTE_SIMS)
+        await asyncio.to_thread(session.compute_recs)
     except Exception as error:
         session.recs = {}
         session.rec_error = f"Rekomendasi tidak tersedia: {error}"

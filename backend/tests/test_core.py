@@ -291,6 +291,52 @@ def test_result_for_a_car_that_stopped_meanwhile_is_discarded(monkeypatch):
     assert s.need_recompute
 
 
+def test_stop_on_the_lap_the_leader_just_finished_still_happens():
+    s = RaceSession("silverstone", "williams", "bersih", 1)
+    snap = s._base_snapshot()
+    snap.lap = 20
+    snap.age[:] = 20
+    snap.own_plans = [[(20, H)], [(24, H)]]  # the car is one lap behind the leader's count
+    out = simulate(snap, [Cand("box", snap.own_plans)], 40, 1)
+    assert (out.first_pit[:, snap.own[0]] == 21).all()
+    assert out.pos[:, 0].mean() < 20
+
+
+def test_box_options_are_never_simulated_as_no_stop():
+    s = RaceSession("silverstone", "williams", "bersih", 8)
+    s.run_prerace(n_sims=40)
+    s.start_race()
+    run_to_lap(s, 20)
+    s.compute_recs(n_sims=120)
+    for code in s.own_codes:
+        rec = s.recs[code]
+        box = [o for o in rec["options"] if o["action"] == "BOX"]
+        stay = next(o for o in rec["options"] if o["action"] == "STAY")
+        assert box and min(o["e_pos"] for o in box) < stay["e_pos"] + 8
+
+
+def test_box_now_and_box_next_are_different_stops():
+    s = RaceSession("silverstone", "williams", "bersih", 8)
+    s.run_prerace(n_sims=40)
+    s.start_race()
+    run_to_lap(s, 20)
+    snap = s.live_snapshot()
+    rec = recommend(snap, 0, snap.lap, GREEN, [], seed=1, n_sims=60)  # a car one lap count behind the leader
+    plans = {o["key"]: o["plan"][0]["lap"] for o in rec["options"] if o["plan"] and o["action"] != "STAY"}
+    assert plans["NEXT"] == plans[f"BOX-{rec['options'][-1]['compound']}"] + 1
+
+
+def test_sim_budget_shrinks_when_slow_and_recovers(session):
+    session.sim_budget = 300
+    session._adapt_budget(6000)
+    assert session.sim_budget == 75
+    session._adapt_budget(60000)
+    assert session.sim_budget == 60  # never below the floor
+    for _ in range(10):
+        session._adapt_budget(100)
+    assert session.sim_budget == 300
+
+
 def test_stay_cancels_a_pending_call():
     s = RaceSession("monza", "haas", "bersih", 4)
     s.run_prerace(n_sims=40)
