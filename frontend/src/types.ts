@@ -85,7 +85,7 @@ export interface State {
   rows?: Row[]; own?: Record<string, OwnView>; recs?: Record<string, Rec>; rec_error?: string | null;
   rivals?: RivalCard[]; alerts?: Alert[]; decisions?: DecisionEntry[];
   notes?: { car: string; text: string; role: string; wall: string }[];
-  compute?: { last_ms: number | null; event_ms: number | null; running_s: number | null };
+  compute?: { last_ms: number | null; event_ms: number | null; running_s: number | null; sim_budget: number };
 }
 
 export interface LapRow {

@@ -77,17 +77,27 @@ export function TrackMap({ circuit, rows, source, selected, exit, threats, theme
     if (!element || !geometry) return;
     const context = element.getContext("2d")!;
     let frame = 0;
+    let lastDraw = 0;
+    let palette: Record<string, string> | null = null;
 
-    const draw = () => {
+    const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
+      // Twenty frames a second reads as smooth here and leaves the CPU to the simulator.
+      if (now - lastDraw < 50) return;
+      lastDraw = now;
       const box = element.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       if (element.width !== Math.round(box.width * dpr) || element.height !== Math.round(box.height * dpr)) {
         element.width = Math.round(box.width * dpr);
         element.height = Math.round(box.height * dpr);
       }
-      const css = getComputedStyle(element);
-      const color = (name: string) => css.getPropertyValue(name).trim();
+      if (!palette) {
+        const css = getComputedStyle(element);
+        palette = Object.fromEntries(["--track", "--ink", "--red", "--rival", "--panel", "--amber"]
+          .map((name) => [name, css.getPropertyValue(name).trim()]));
+      }
+      const colors = palette;
+      const color = (name: string) => colors[name];
       const { path, lengths, minX, maxX, minY, maxY } = geometry;
       const pad = 22;
       const scale = Math.min((box.width - pad * 2) / (maxX - minX), (box.height - pad * 2) / (maxY - minY));
@@ -136,7 +146,7 @@ export function TrackMap({ circuit, rows, source, selected, exit, threats, theme
         let delta = row.u - previous;
         if (delta < -0.5) delta += 1;
         if (delta > 0.5) delta -= 1;
-        const eased = (previous + delta * 0.16 + 1) % 1;
+        const eased = (previous + delta * 0.45 + 1) % 1;
         shown.current[row.code] = eased;
         const m = map(at(path, lengths, eased));
         const threat = threats.includes(row.code);
